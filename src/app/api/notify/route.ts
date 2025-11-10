@@ -26,6 +26,9 @@ export async function POST(req: Request) {
  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.app.flitzap.com';
 const bookingUrl = `${siteUrl}/?ref=${encodeURIComponent(reference || '')}`;
 const logoUrl = process.env.EMAIL_LOGO_URL || 'https://mrdrzqkhaoqezzbxjfds.supabase.co/storage/v1/object/public/public-assets/flitzap-logo.png';
+const appUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://app.flitzap.com';
+const viewUrl = `${appUrl}/?ref=${encodeURIComponent(reference)}`;
+
 
     if (!apiKey) {
       return NextResponse.json({ ok: false, error: 'Missing BREVO_API_KEY' }, { status: 400 });
@@ -63,6 +66,14 @@ const logoUrl = process.env.EMAIL_LOGO_URL || 'https://mrdrzqkhaoqezzbxjfds.supa
         <tr><td style="padding:8px 0; color:#4a4a4a; vertical-align:top;">Notes:</td><td style="padding:8px 0;">${notes || ''}</td></tr>
       </table>
     `;
+
+const viewCta = `
+  <div style="margin-top:16px">
+    <a href="${viewUrl}"
+       style="display:inline-block;padding:10px 14px;background:#3788da;color:#fff;border-radius:8px;text-decoration:none;">
+      View Booking
+    </a>
+  </div>`;
 
     const nextSteps = `
       <div style="margin-top:18px; padding:12px; background:#F7FBFF; border:1px solid #E5DCC5; border-radius:8px;">
@@ -104,6 +115,9 @@ const logoUrl = process.env.EMAIL_LOGO_URL || 'https://mrdrzqkhaoqezzbxjfds.supa
               </p>
 
               ${detailsTable}
+${viewCta}
+${type !== 'booking.cancelled' ? nextSteps : ''}
+
 
               <div style="text-align:center; margin:22px 0 6px;">
                 <a href="${bookingUrl}"

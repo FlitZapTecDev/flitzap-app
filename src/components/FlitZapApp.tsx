@@ -28,6 +28,9 @@ type Booking = {
   createdAt: string; // ISO
 };
 
+const MARKETING_URL =
+  process.env.NEXT_PUBLIC_MARKETING_URL || 'https://flitzap.com';
+
 const PRIMARY = '#3788da';
 const DARK = '#1a1a2e';
 const TEXT = '#4a4a4a';
@@ -122,6 +125,67 @@ const FlitZapApp = () => {
       localStorage.setItem('fz_user', JSON.stringify(userInfo));
     } catch {}
   }, [userInfo]);
+
+// Deep-link: load booking when coming from email (?ref=FZ-...)
+useEffect(() => {
+  try {
+    const qs = new URLSearchParams(window.location.search);
+    const ref = qs.get('ref');
+    if (!ref) return;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('reference', ref)
+        .limit(1);
+
+      if (error) {
+        console.error('Load by ref error:', error);
+        return;
+      }
+      const row = data?.[0];
+      if (!row) return;
+
+      const mapped: Booking = {
+        id: row.id,
+        service: row.service,
+        date: row.date,
+        time: row.time,
+        status: row.status,
+        reference: row.reference,
+        customer: {
+          name: row.customer_name,
+          email: row.customer_email,
+          phone: row.customer_phone,
+          address: row.customer_address,
+        },
+        notes: row.notes || '',
+        createdAt: row.created_at,
+      };
+
+      // hydrate UI state
+      setUserInfo({
+        name: mapped.customer.name,
+        email: mapped.customer.email,
+        phone: mapped.customer.phone,
+        address: mapped.customer.address,
+        notes: mapped.notes || '',
+      });
+      setIsLoggedIn(true);
+
+      setAllBookings(prev =>
+        prev.some(b => b.reference === mapped.reference) ? prev : [...prev, mapped]
+      );
+
+      // open My Bookings panel
+      setShowDashboard(true);
+      setCurrentStep('home');
+    })();
+  } catch (e) {
+    console.error('Deep-link exception:', e);
+  }
+}, []);
 
 useEffect(() => {
   const url = new URL(window.location.href);
@@ -462,8 +526,19 @@ useEffect(() => {
                 <ArrowLeft className="w-5 h-5" style={{ color: DARK }} />
               </button>
             )}
-            <h1 className="cursor-pointer" onClick={resetFlow} aria-label="FlitZap Home">
-              {logoOk ? (
+            <h1 className="cursor-pointer" <h1
+  className="cursor-pointer"
+  onClick={(e) => {
+    if (e.metaKey || e.ctrlKey) {
+      window.open(MARKETING_URL, '_blank', 'noopener,noreferrer');
+    } else {
+      resetFlow();
+    }
+  }}
+  aria-label="FlitZap Home"
+>
+  {logoOk ? ( /* your existing logo */ ) : ( /* your existing fallback */ )}
+</h1>
                 <Image
                   src="/flitzap-logo.png"
                   alt="FlitZap"
@@ -481,6 +556,17 @@ useEffect(() => {
             </h1>
           </div>
           <div className="flex items-center space-x-3">
+<a
+  href={MARKETING_URL}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="px-3 py-2 rounded-md text-sm font-medium hover:opacity-90"
+  style={{ border: `1px solid ${BORDER}`, color: DARK, background: '#fff' }}
+  title="Go to flitzap.com"
+>
+  Website
+</a>
+
             {isLoggedIn && (
               <>
                 {firstName && (
@@ -567,7 +653,12 @@ useEffect(() => {
           </div>
 
           <div className="mt-8 text-center text-sm" style={{ color: TEXT }}>
-            <p>📞 (470) 604-1366 • 📧 info@flitzap.com</p>
+            <p>
+  📞 (470) 604-1366 • 📧 info@flitzap.com •{' '}
+  <a href={MARKETING_URL} target="_blank" rel="noopener noreferrer" style={{ color: PRIMARY }}>
+    flitzap.com
+  </a>
+</p>
           </div>
         </div>
       )}
