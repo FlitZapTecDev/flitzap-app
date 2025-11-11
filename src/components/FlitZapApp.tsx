@@ -17,19 +17,19 @@ import {
 import { supabase } from '../lib/supabaseClient';
 
 type Booking = {
-  id: number; // Supabase row id
+  id: number;
   service: string;
-  date: string;     // YYYY-MM-DD
-  time: string;     // e.g. "10:00 AM"
+  date: string;
+  time: string;
   status: 'Confirmed' | 'Cancelled' | 'Completed';
   reference: string;
   customer: { name: string; email: string; phone: string; address: string };
   notes?: string | null;
-  createdAt: string; // ISO
+  createdAt: string;
 };
 
-const MARKETING_URL =
-  process.env.NEXT_PUBLIC_MARKETING_URL || 'https://flitzap.com';
+const MARKETING_URL = process.env.NEXT_PUBLIC_MARKETING_URL || 'https://flitzap.com';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://app.flitzap.com';
 
 const PRIMARY = '#3788da';
 const DARK = '#1a1a2e';
@@ -40,13 +40,10 @@ const SOFT = '#FFFCE2';
 const PALEBLUE = '#F7FBFF';
 
 const FlitZapApp = () => {
-  const [currentStep, setCurrentStep] =
-    useState<'home' | 'time-selection' | 'checkout' | 'confirmation'>('home');
-
+  const [currentStep, setCurrentStep] = useState<'home' | 'time-selection' | 'checkout' | 'confirmation'>('home');
   const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
-
   const [userInfo, setUserInfo] = useState({
     email: '',
     phone: '',
@@ -54,14 +51,11 @@ const FlitZapApp = () => {
     name: '',
     notes: '',
   });
-
   const [bookingReference, setBookingReference] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
   const [showDashboard, setShowDashboard] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [showReschedule, setShowReschedule] = useState(false);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
@@ -76,8 +70,7 @@ const FlitZapApp = () => {
       {
         id: 'house-cleaning',
         title: 'Cleaning Services',
-        description:
-          'Emergency cleaning when you need a spotless space right away. Perfect for last-minute or urgent needs.',
+        description: 'Emergency cleaning when you need a spotless space right away. Perfect for last-minute or urgent needs.',
         price: 'Get Quote',
         icon: Home,
         active: true,
@@ -85,8 +78,7 @@ const FlitZapApp = () => {
       {
         id: 'general-labor',
         title: 'General Labor',
-        description:
-          'Need an extra hand? Our general laborers help with moving, setup, and day-to-day tasks.',
+        description: 'Need an extra hand? Our general laborers help with moving, setup, and day-to-day tasks.',
         price: 'Get Quote',
         icon: Briefcase,
         active: true,
@@ -103,7 +95,40 @@ const FlitZapApp = () => {
     []
   );
 
-  const timeSlots = ['8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM'];
+  // Get available time slots based on current time
+  const getAvailableTimeSlots = (selectedDateStr: string) => {
+    const allSlots = [
+      '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
+      '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM',
+      '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM'
+    ];
+
+    const now = new Date();
+    const selectedDate = new Date(selectedDateStr);
+    const isToday = selectedDate.toDateString() === now.toDateString();
+
+    if (!isToday) {
+      return allSlots;
+    }
+
+    // Filter out past times for today
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    return allSlots.filter(slot => {
+      const [time, period] = slot.split(' ');
+      let [hours] = time.split(':').map(Number);
+
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+
+      // Show only slots that are at least 1 hour in the future
+      if (hours < currentHour) return false;
+      if (hours === currentHour && currentMinute > 0) return false;
+
+      return true;
+    });
+  };
 
   // Load saved user + hidden admin gate
   useEffect(() => {
@@ -126,77 +151,64 @@ const FlitZapApp = () => {
     } catch {}
   }, [userInfo]);
 
-useEffect(() => {
-  try {
-    const qs = new URLSearchParams(window.location.search);
-    const ref = qs.get('ref');
-    if (!ref) return;
+  // Deep-link handler
+  useEffect(() => {
+    try {
+      const qs = new URLSearchParams(window.location.search);
+      const ref = qs.get('ref');
+      if (!ref) return;
 
-    (async () => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('reference', ref)
-        .limit(1);
+      (async () => {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('reference', ref)
+          .limit(1);
 
-      if (error) {
-        console.error('Load by ref error:', error);
-        return;
-      }
-      const row = data?.[0];
-      if (!row) return;
+        if (error) {
+          console.error('Load by ref error:', error);
+          return;
+        }
+        const row = data?.[0];
+        if (!row) return;
 
-      const mapped: Booking = {
-        id: row.id,
-        service: row.service,
-        date: row.date,
-        time: row.time,
-        status: row.status,
-        reference: row.reference,
-        customer: {
-          name: row.customer_name,
-          email: row.customer_email,
-          phone: row.customer_phone,
-          address: row.customer_address,
-        },
-        notes: row.notes || '',
-        createdAt: row.created_at,
-      };
+        const mapped: Booking = {
+          id: row.id,
+          service: row.service,
+          date: row.date,
+          time: row.time,
+          status: row.status,
+          reference: row.reference,
+          customer: {
+            name: row.customer_name,
+            email: row.customer_email,
+            phone: row.customer_phone,
+            address: row.customer_address,
+          },
+          notes: row.notes || '',
+          createdAt: row.created_at,
+        };
 
-      setUserInfo({
-        name: mapped.customer.name,
-        email: mapped.customer.email,
-        phone: mapped.customer.phone,
-        address: mapped.customer.address,
-        notes: mapped.notes || '',
-      });
-      setIsLoggedIn(true);
+        setUserInfo({
+          name: mapped.customer.name,
+          email: mapped.customer.email,
+          phone: mapped.customer.phone,
+          address: mapped.customer.address,
+          notes: mapped.notes || '',
+        });
+        setIsLoggedIn(true);
 
-      setAllBookings(prev =>
-        prev.some(b => b.reference === mapped.reference) ? prev : [...prev, mapped]
-      );
+        setAllBookings(prev =>
+          prev.some(b => b.reference === mapped.reference) ? prev : [...prev, mapped]
+        );
 
-      setShowDashboard(true);
-      setCurrentStep('home');
-    })();
-  } catch (e) {
-    console.error('Deep-link exception:', e);
-  }
-}, []);
-
-
-useEffect(() => {
-  const url = new URL(window.location.href);
-  const ref = url.searchParams.get('ref');
-  if (!ref) return;
-
-  const match = allBookings.find(b => b.reference === ref);
-  if (match) {
-    setUserInfo(match.customer);
-    setShowDashboard(true);
-    setCurrentStep('home');
-  }
-}, [allBookings]);
+        setShowDashboard(true);
+        setCurrentStep('home');
+      })();
+    } catch (e) {
+      console.error('Deep-link exception:', e);
+    }
+  }, []);
 
   const firstName = (userInfo.name || '').trim().split(' ')[0] || '';
 
@@ -241,7 +253,6 @@ useEffect(() => {
     createdAt: row.created_at,
   });
 
-  // Load bookings for logged-in user (by email OR phone)
   const fetchBookingsForUser = async () => {
     if (!userInfo.email && !userInfo.phone) return;
     try {
@@ -269,12 +280,11 @@ useEffect(() => {
     }
   };
 
-  // Re-fetch when email/phone changes (and on first load after we restore user)
   useEffect(() => {
     if (userInfo.email || userInfo.phone) {
       fetchBookingsForUser();
     } else {
-      setAllBookings([]); // nothing to show
+      setAllBookings([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userInfo.email, userInfo.phone]);
@@ -325,7 +335,6 @@ useEffect(() => {
       setIsLoggedIn(true);
       setCurrentStep('confirmation');
 
-      // Fire email notifications (Brevo) via API route if present
       try {
         await fetch('/api/notify', {
           method: 'POST',
@@ -366,49 +375,47 @@ useEffect(() => {
   };
 
   const cancelBooking = async (bookingId: number) => {
-  const b = allBookings.find(x => x.id === bookingId);
-  if (!b) return;
+    const b = allBookings.find(x => x.id === bookingId);
+    if (!b) return;
 
-  try {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: 'Cancelled' })
-      .eq('reference', b.reference);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'Cancelled' })
+        .eq('reference', b.reference);
 
-    if (error) {
-      alert('Could not cancel (database).');
+      if (error) {
+        alert('Could not cancel (database).');
+        return;
+      }
+    } catch {
+      alert('Could not cancel (network).');
       return;
     }
-  } catch {
-    alert('Could not cancel (network).');
-    return;
-  }
 
-  setAllBookings(prev => prev.map(x => (x.id === bookingId ? { ...x, status: 'Cancelled' } : x)));
+    setAllBookings(prev => prev.map(x => (x.id === bookingId ? { ...x, status: 'Cancelled' } : x)));
 
-  try {
-    await fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'booking.cancelled',
-        toEmail: b.customer.email,
-        toName: b.customer.name,
-        reference: b.reference,
-        service: b.service,
-        date: b.date,
-        time: b.time,
-        name: b.customer.name,
-        email: b.customer.email,
-        phone: b.customer.phone,
-        address: b.customer.address,
-        notes: b.notes || '',
-      }),
-    });
-  } catch {
-  }
-};
-
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'booking.cancelled',
+          toEmail: b.customer.email,
+          toName: b.customer.name,
+          reference: b.reference,
+          service: b.service,
+          date: b.date,
+          time: b.time,
+          name: b.customer.name,
+          email: b.customer.email,
+          phone: b.customer.phone,
+          address: b.customer.address,
+          notes: b.notes || '',
+        }),
+      });
+    } catch {}
+  };
 
   const openReschedule = (booking: Booking) => {
     setRescheduleBooking(booking);
@@ -422,59 +429,53 @@ useEffect(() => {
     setRescheduleBooking(null);
   };
 
- const saveReschedule = async () => {
-  if (!rescheduleBooking || !rescheduleDate || !rescheduleTime) return;
+  const saveReschedule = async () => {
+    if (!rescheduleBooking || !rescheduleDate || !rescheduleTime) return;
 
-  // Update DB
-  try {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ date: rescheduleDate, time: rescheduleTime })
-      .eq('reference', rescheduleBooking.reference);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ date: rescheduleDate, time: rescheduleTime })
+        .eq('reference', rescheduleBooking.reference);
 
-    if (error) {
-      alert('Could not reschedule (database).');
+      if (error) {
+        alert('Could not reschedule (database).');
+        return;
+      }
+    } catch {
+      alert('Could not reschedule (network).');
       return;
     }
-  } catch {
-    alert('Could not reschedule (network).');
-    return;
-  }
 
-  // Update UI
-  setAllBookings(prev =>
-    prev.map(b => (b.id === rescheduleBooking.id ? { ...b, date: rescheduleDate, time: rescheduleTime } : b)),
-  );
+    setAllBookings(prev =>
+      prev.map(b => (b.id === rescheduleBooking.id ? { ...b, date: rescheduleDate, time: rescheduleTime } : b)),
+    );
 
-  // Email notify
-  try {
-    await fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'booking.rescheduled',
-        toEmail: rescheduleBooking.customer.email,
-        toName: rescheduleBooking.customer.name,
-        reference: rescheduleBooking.reference,
-        service: rescheduleBooking.service,
-        date: rescheduleDate,
-        time: rescheduleTime,
-        name: rescheduleBooking.customer.name,
-        email: rescheduleBooking.customer.email,
-        phone: rescheduleBooking.customer.phone,
-        address: rescheduleBooking.customer.address,
-        notes: rescheduleBooking.notes || '',
-      }),
-    });
-  } catch {
-    // ignore
-  }
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'booking.rescheduled',
+          toEmail: rescheduleBooking.customer.email,
+          toName: rescheduleBooking.customer.name,
+          reference: rescheduleBooking.reference,
+          service: rescheduleBooking.service,
+          date: rescheduleDate,
+          time: rescheduleTime,
+          name: rescheduleBooking.customer.name,
+          email: rescheduleBooking.customer.email,
+          phone: rescheduleBooking.customer.phone,
+          address: rescheduleBooking.customer.address,
+          notes: rescheduleBooking.notes || '',
+        }),
+      });
+    } catch {}
 
-  closeReschedule();
-};
+    closeReschedule();
+  };
 
   const exportBookings = async () => {
-    // Export whatever is currently in allBookings
     const csvContent = [
       ['Reference', 'Service', 'Date', 'Time', 'Status', 'Name', 'Email', 'Phone', 'Address', 'Notes'],
       ...allBookings.map((b) => [
@@ -502,63 +503,62 @@ useEffect(() => {
     window.URL.revokeObjectURL(url);
   };
 
+  const availableSlots = selectedDate ? getAvailableTimeSlots(selectedDate) : [];
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: CANVAS }}>
       {/* Header */}
       <header className="bg-white shadow-sm border-b" style={{ borderColor: BORDER }}>
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-   <div className="flex items-center">
-  {(currentStep !== 'home' || (isAdmin && showAdmin)) && !showDashboard && (
-    <button
-      onClick={() => {
-        if (showAdmin) {
-          setShowAdmin(false);
-          setCurrentStep('home');
-        } else if (currentStep === 'time-selection') setCurrentStep('home');
-        else if (currentStep === 'checkout') setCurrentStep('time-selection');
-        else if (currentStep === 'confirmation') resetFlow();
-      }}
-      className="mr-3 p-1 hover:bg-gray-100 rounded"
-      aria-label="Back"
-    >
-      <ArrowLeft className="w-5 h-5" style={{ color: DARK }} />
-    </button>
-  )}
+          <div className="flex items-center">
+            {(currentStep !== 'home' || (isAdmin && showAdmin)) && !showDashboard && (
+              <button
+                onClick={() => {
+                  if (showAdmin) {
+                    setShowAdmin(false);
+                    setCurrentStep('home');
+                  } else if (currentStep === 'time-selection') setCurrentStep('home');
+                  else if (currentStep === 'checkout') setCurrentStep('time-selection');
+                  else if (currentStep === 'confirmation') resetFlow();
+                }}
+                className="mr-3 p-1 hover:bg-gray-100 rounded"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-5 h-5" style={{ color: DARK }} />
+              </button>
+            )}
 
-  <h1
-    className="cursor-pointer"
-    onClick={resetFlow}
-    aria-label="FlitZap Home"
-  >
-    {logoOk ? (
-      <Image
-        src="/flitzap-logo.png"
-        alt="FlitZap"
-        width={160}
-        height={40}
-        priority
-        onError={() => setLogoOk(false)}
-        style={{ height: '40px', width: 'auto' }}
-      />
-    ) : (
-      <span className="text-2xl font-bold">
-        <span style={{ color: DARK }}>Flit</span>
-        <span style={{ color: PRIMARY }}>Zap</span>
-      </span>
-    )}
-  </h1>
-</div>
+            <h1 className="cursor-pointer" onClick={resetFlow} aria-label="FlitZap Home">
+              {logoOk ? (
+                <Image
+                  src="/flitzap-logo.png"
+                  alt="FlitZap"
+                  width={160}
+                  height={40}
+                  priority
+                  onError={() => setLogoOk(false)}
+                  className="h-10 w-auto"
+                />
+              ) : (
+                <span className="text-2xl font-bold">
+                  <span style={{ color: DARK }}>Flit</span>
+                  <span style={{ color: PRIMARY }}>Zap</span>
+                </span>
+              )}
+            </h1>
+          </div>
+
           <div className="flex items-center space-x-3">
-<a
-  href={MARKETING_URL}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="px-3 py-2 rounded-md text-sm font-medium hover:opacity-90"
-  style={{ border: `1px solid ${BORDER}`, color: DARK, background: '#fff' }}
-  title="Go to flitzap.com"
->
-  Website
-</a>
+            
+              href={MARKETING_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 rounded-md text-sm font-medium hover:opacity-90"
+              style={{ border: `1px solid ${BORDER}`, color: DARK, background: '#fff' }}
+              title="Go to flitzap.com"
+            >
+              Website
+            </a>
 
             {isLoggedIn && (
               <>
@@ -647,11 +647,11 @@ useEffect(() => {
 
           <div className="mt-8 text-center text-sm" style={{ color: TEXT }}>
             <p>
-  📞 (470) 604-1366 • 📧 info@flitzap.com •{' '}
-  <a href={MARKETING_URL} target="_blank" rel="noopener noreferrer" style={{ color: PRIMARY }}>
-    flitzap.com
-  </a>
-</p>
+              📞 (470) 604-1366 • 📧 info@flitzap.com •{' '}
+              <a href={MARKETING_URL} target="_blank" rel="noopener noreferrer" style={{ color: PRIMARY }}>
+                flitzap.com
+              </a>
+            </p>
           </div>
         </div>
       )}
@@ -699,27 +699,35 @@ useEffect(() => {
                 <label className="block text-sm font-medium mb-3 flex items-center" style={{ color: DARK }}>
                   <Clock className="w-4 h-4 mr-2" /> Select Time
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {timeSlots.map((time) => (
-                    <button
-                      key={time}
-                      onClick={() => setSelectedTime(time)}
-                      className="p-3 text-sm rounded-lg"
-                      style={{
-                        border: `1px solid ${BORDER}`,
-                        backgroundColor: selectedTime === time ? PRIMARY : 'white',
-                        color: selectedTime === time ? '#fff' : DARK,
-                      }}
-                    >
-                      {time}
-                    </button>
-                  ))}
-                </div>
+                {availableSlots.length === 0 ? (
+                  <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
+                    <p className="text-sm text-yellow-800">
+                      No more time slots available today. Please select a future date.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableSlots.map((time) => (
+                      <button
+                        key={time}
+                        onClick={() => setSelectedTime(time)}
+                        className="p-3 text-sm rounded-lg"
+                        style={{
+                          border: `1px solid ${BORDER}`,
+                          backgroundColor: selectedTime === time ? PRIMARY : 'white',
+                          color: selectedTime === time ? '#fff' : DARK,
+                        }}
+                      >
+                        {time}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {selectedDate && selectedTime && (
+          {selectedDate && selectedTime && availableSlots.length > 0 && (
             <button
               onClick={handleTimeSelection}
               className="w-full mt-8 py-3 rounded-lg font-medium"
@@ -773,7 +781,7 @@ useEffect(() => {
               <CreditCard className="w-4 h-4 mr-2" /> Payment Method
             </p>
             <p className="text-sm" style={{ color: TEXT }}>
-              We’ll collect payment after your job is completed. You’ll receive a secure link by text to pay from your phone.
+              We'll collect payment after your job is completed. You'll receive a secure link by text to pay from your phone.
             </p>
           </div>
 
@@ -821,7 +829,7 @@ useEffect(() => {
                 <p className="font-medium" style={{ color: DARK }}>
                   <CreditCard className="w-4 h-4 inline mr-1" /> Payment
                 </p>
-                <p className="text-sm">After your job is completed, we’ll text you a secure link to pay from your phone. No charge upfront.</p>
+                <p className="text-sm">After your job is completed, we'll text you a secure link to pay from your phone. No charge upfront.</p>
               </div>
             </div>
           </div>
@@ -913,7 +921,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Admin (hidden unless localStorage fz_admin='1') */}
+      {/* Admin Dashboard */}
       {isAdmin && showAdmin && (
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-8">
@@ -994,22 +1002,28 @@ useEffect(() => {
               {rescheduleDate && (
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: DARK }}>New Time</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {timeSlots.map((time) => (
-                      <button
-                        key={time}
-                        onClick={() => setRescheduleTime(time)}
-                        className="p-2 text-sm rounded"
-                        style={{
-                          border: `1px solid ${BORDER}`,
-                          backgroundColor: rescheduleTime === time ? PRIMARY : 'white',
-                          color: rescheduleTime === time ? '#fff' : DARK,
-                        }}
-                      >
-                        {time}
-                      </button>
-                    ))}
-                  </div>
+                  {getAvailableTimeSlots(rescheduleDate).length === 0 ? (
+                    <p className="text-sm p-3 bg-yellow-50 rounded border border-yellow-200 text-yellow-800">
+                      No available time slots for this date.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {getAvailableTimeSlots(rescheduleDate).map((time) => (
+                        <button
+                          key={time}
+                          onClick={() => setRescheduleTime(time)}
+                          className="p-2 text-sm rounded"
+                          style={{
+                            border: `1px solid ${BORDER}`,
+                            backgroundColor: rescheduleTime === time ? PRIMARY : 'white',
+                            color: rescheduleTime === time ? '#fff' : DARK,
+                          }}
+                        >
+                          {time}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <button
