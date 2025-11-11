@@ -126,7 +126,6 @@ const FlitZapApp = () => {
     } catch {}
   }, [userInfo]);
 
-// Deep-link: load booking when coming from email (?ref=FZ-...)
 useEffect(() => {
   try {
     const qs = new URLSearchParams(window.location.search);
@@ -164,7 +163,6 @@ useEffect(() => {
         createdAt: row.created_at,
       };
 
-      // hydrate UI state
       setUserInfo({
         name: mapped.customer.name,
         email: mapped.customer.email,
@@ -178,7 +176,6 @@ useEffect(() => {
         prev.some(b => b.reference === mapped.reference) ? prev : [...prev, mapped]
       );
 
-      // open My Bookings panel
       setShowDashboard(true);
       setCurrentStep('home');
     })();
@@ -186,6 +183,7 @@ useEffect(() => {
     console.error('Deep-link exception:', e);
   }
 }, []);
+
 
 useEffect(() => {
   const url = new URL(window.location.href);
@@ -509,52 +507,47 @@ useEffect(() => {
       {/* Header */}
       <header className="bg-white shadow-sm border-b" style={{ borderColor: BORDER }}>
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center">
-            {(currentStep !== 'home' || (isAdmin && showAdmin)) && !showDashboard && (
-              <button
-                onClick={() => {
-                  if (showAdmin) {
-                    setShowAdmin(false);
-                    setCurrentStep('home');
-                  } else if (currentStep === 'time-selection') setCurrentStep('home');
-                  else if (currentStep === 'checkout') setCurrentStep('time-selection');
-                  else if (currentStep === 'confirmation') resetFlow();
-                }}
-                className="mr-3 p-1 hover:bg-gray-100 rounded"
-                aria-label="Back"
-              >
-                <ArrowLeft className="w-5 h-5" style={{ color: DARK }} />
-              </button>
-            )}
-            <h1 className="cursor-pointer" <h1
-  className="cursor-pointer"
-  onClick={(e) => {
-    if (e.metaKey || e.ctrlKey) {
-      window.open(MARKETING_URL, '_blank', 'noopener,noreferrer');
-    } else {
-      resetFlow();
-    }
-  }}
-  aria-label="FlitZap Home"
->
-  {logoOk ? ( /* your existing logo */ ) : ( /* your existing fallback */ )}
-</h1>
-                <Image
-                  src="/flitzap-logo.png"
-                  alt="FlitZap"
-                  width={160}
-                  height={40}
-                  priority
-                  onError={() => setLogoOk(false)}
-                />
-              ) : (
-                <span className="text-2xl font-bold">
-                  <span style={{ color: DARK }}>Flit</span>
-                  <span style={{ color: PRIMARY }}>Zap</span>
-                </span>
-              )}
-            </h1>
-          </div>
+   <div className="flex items-center">
+  {(currentStep !== 'home' || (isAdmin && showAdmin)) && !showDashboard && (
+    <button
+      onClick={() => {
+        if (showAdmin) {
+          setShowAdmin(false);
+          setCurrentStep('home');
+        } else if (currentStep === 'time-selection') setCurrentStep('home');
+        else if (currentStep === 'checkout') setCurrentStep('time-selection');
+        else if (currentStep === 'confirmation') resetFlow();
+      }}
+      className="mr-3 p-1 hover:bg-gray-100 rounded"
+      aria-label="Back"
+    >
+      <ArrowLeft className="w-5 h-5" style={{ color: DARK }} />
+    </button>
+  )}
+
+  <h1
+    className="cursor-pointer"
+    onClick={resetFlow}
+    aria-label="FlitZap Home"
+  >
+    {logoOk ? (
+      <Image
+        src="/flitzap-logo.png"
+        alt="FlitZap"
+        width={160}
+        height={40}
+        priority
+        onError={() => setLogoOk(false)}
+        style={{ height: '40px', width: 'auto' }}
+      />
+    ) : (
+      <span className="text-2xl font-bold">
+        <span style={{ color: DARK }}>Flit</span>
+        <span style={{ color: PRIMARY }}>Zap</span>
+      </span>
+    )}
+  </h1>
+</div>
           <div className="flex items-center space-x-3">
 <a
   href={MARKETING_URL}
