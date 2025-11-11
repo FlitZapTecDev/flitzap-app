@@ -19,7 +19,6 @@ export async function POST(req: Request) {
       notes = '',
     } = body || {};
 
-    // ENV
     const apiKey   = process.env.BREVO_API_KEY || '';
     const fromEmail = process.env.EMAIL_FROM || 'bookings@flitzap.com';
     const fromName  = process.env.EMAIL_FROM_NAME || 'FlitZap';
@@ -28,15 +27,14 @@ export async function POST(req: Request) {
       process.env.EMAIL_LOGO_URL ||
       'https://mrdrzqkhaoqezzbxjfds.supabase.co/storage/v1/object/public/public-assets/flitzap-logo.png';
 
-    // Build the base app URL (no trailing slash), default to production subdomain
-    const APP_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://app.flitzap.com').replace(/\/$/, '');
-    const bookingUrl = `${APP_URL}/?ref=${encodeURIComponent(reference || '')}`;
+    // IMPORTANT: must be your app domain in production (set in Vercel)
+    const appBase   = process.env.NEXT_PUBLIC_SITE_URL || 'https://app.flitzap.com';
+    const bookingUrl = `${appBase}/?ref=${encodeURIComponent(reference || '')}`;
 
     if (!apiKey) {
       return NextResponse.json({ ok: false, error: 'Missing BREVO_API_KEY' }, { status: 400 });
     }
 
-    // Subjects
     const subjects = {
       created_customer: `Your FlitZap Booking 🟦 — ${reference}`,
       created_team:     `🟦 New Booking — ${reference}`,
@@ -46,15 +44,13 @@ export async function POST(req: Request) {
       cancel_team:      `🟥 Booking Cancelled — ${reference}`,
     };
 
-    // Header line in the body
     const headers = {
-      'booking.created':     'Booking Confirmed',
-      'booking.rescheduled': 'Booking Rescheduled',
-      'booking.cancelled':   'Booking Cancelled',
+      'booking.created':    'Booking Confirmed',
+      'booking.rescheduled':'Booking Rescheduled',
+      'booking.cancelled':  'Booking Cancelled',
     } as const;
 
-    const headerText =
-      headers[(type as keyof typeof headers) || 'booking.created'] || 'Booking Confirmation';
+    const headerText = headers[type as keyof typeof headers] ?? 'Booking Confirmation';
 
     const detailsTable = `
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="font:400 14px/1.6 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial; color:#1a1a2e;">
@@ -77,25 +73,25 @@ export async function POST(req: Request) {
         </div>
         <div style="font:400 13px/1.6 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial; color:#4a4a4a;">
           • A coordinator will call to confirm your quote.<br/>
-          • You'll receive a secure payment link <em>after</em> the job is complete.
+          • You’ll receive a secure payment link <em>after</em> the job is complete.
         </div>
       </div>
     `;
 
-    // Base HTML. We pass includeCta=true for the customer email only.
-    const baseHtml = (greeting: string, includeCta: boolean) => `
+    // ONE logo, ONE CTA, logo not squished (height:auto via style)
+    const baseHtml = (greeting: string, bookingUrl: string) => `
       <!DOCTYPE html><html><head></head>
       <body style="margin:0;padding:0;background:#f6f9fc;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f6f9fc;padding:24px 0;">
           <tr><td align="center">
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="560" style="max-width:560px;background:#ffffff;border:1px solid #e6f0f3;border-radius:10px;overflow:hidden;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="560" style="max-width:560px;background:#ffffff;border:1px solid #e6e6e6;border-radius:10px;overflow:hidden;">
               <tr>
                 <td style="padding:20px 24px; text-align:center; background:#ffffff; border-bottom:1px solid #eee;">
                   <img
                     src="${logoUrl}"
                     alt="FlitZap"
                     width="160"
-                    style="display:block;margin:0 auto;max-width:160px;height:auto;border:0;outline:none;text-decoration:none;"
+                    style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;height:auto;"
                   />
                 </td>
               </tr>
@@ -111,18 +107,12 @@ export async function POST(req: Request) {
 
                   ${detailsTable}
 
-                  ${
-                    includeCta
-                      ? `<div style="text-align:center; margin:22px 0 6px;">
-                           <a href="${bookingUrl}"
-                              style="display:inline-block;background:#3788da;color:#ffffff;text-decoration:none;
-                                     font:600 14px/1 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial;
-                                     padding:12px 18px;border-radius:8px;">
-                             View booking
-                           </a>
-                         </div>`
-                      : ''
-                  }
+                  <div style="text-align:center; margin:22px 0 6px;">
+                    <a href="${bookingUrl}"
+                      style="display:inline-block;background:#3788da;color:#ffffff;text-decoration:none;font:600 14px/1 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial;padding:12px 18px;border-radius:8px;">
+                      View Booking
+                    </a>
+                  </div>
 
                   ${type !== 'booking.cancelled' ? nextSteps : ''}
                 </td>
@@ -140,7 +130,6 @@ export async function POST(req: Request) {
       </body></html>
     `;
 
-    // Greetings
     const greetingCustomer =
       type === 'booking.cancelled'
         ? `Hi ${toName || name}, your booking has been cancelled.`
@@ -153,7 +142,6 @@ export async function POST(req: Request) {
         ? `Booking was cancelled.`
         : `New booking received.`;
 
-    // Payloads
     const payloadCustomer = {
       sender: { email: fromEmail, name: fromName },
       to: [{ email: toEmail || email, name: toName || name }],
@@ -163,7 +151,7 @@ export async function POST(req: Request) {
           : type === 'booking.cancelled'
           ? subjects.cancel_customer
           : subjects.created_customer,
-      htmlContent: baseHtml(greetingCustomer, true), // include CTA
+      htmlContent: baseHtml(greetingCustomer, bookingUrl),
     };
 
     const payloadTeam = {
@@ -175,7 +163,7 @@ export async function POST(req: Request) {
           : type === 'booking.cancelled'
           ? subjects.cancel_team
           : subjects.created_team,
-      htmlContent: baseHtml(greetingTeam, false), // no CTA
+      htmlContent: baseHtml(greetingTeam, bookingUrl),
     };
 
     const resp = await Promise.all([

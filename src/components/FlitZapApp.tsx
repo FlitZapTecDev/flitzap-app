@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import {
   Calendar,
@@ -19,17 +19,14 @@ import { supabase } from '../lib/supabaseClient';
 type Booking = {
   id: number;
   service: string;
-  date: string;
-  time: string;
+  date: string;   // 'YYYY-MM-DD'
+  time: string;   // '10:00 AM'
   status: 'Confirmed' | 'Cancelled' | 'Completed';
   reference: string;
   customer: { name: string; email: string; phone: string; address: string };
-  notes?: string | null;
+  notes?: string;
   createdAt: string;
 };
-
-const MARKETING_URL = process.env.NEXT_PUBLIC_MARKETING_URL || 'https://flitzap.com';
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://app.flitzap.com';
 
 const PRIMARY = '#3788da';
 const DARK = '#1a1a2e';
@@ -41,20 +38,14 @@ const PALEBLUE = '#F7FBFF';
 
 const FlitZapApp = () => {
   const [currentStep, setCurrentStep] = useState<'home' | 'time-selection' | 'checkout' | 'confirmation'>('home');
-  const [selectedService, setSelectedService] = useState<any>(null);
+  const [selectedService, setSelectedService] = useState<{ id: string; title: string; price: string; icon: any } | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
-  const [userInfo, setUserInfo] = useState({
-    email: '',
-    phone: '',
-    address: '',
-    name: '',
-    notes: '',
-  });
+  const [userInfo, setUserInfo] = useState({ email: '', phone: '', address: '', name: '', notes: '' });
   const [bookingReference, setBookingReference] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);         // set localStorage.fz_admin='1' to reveal
   const [showAdmin, setShowAdmin] = useState(false);
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [showReschedule, setShowReschedule] = useState(false);
@@ -63,75 +54,57 @@ const FlitZapApp = () => {
   const [rescheduleTime, setRescheduleTime] = useState('');
   const [logoOk, setLogoOk] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [loadingBookings, setLoadingBookings] = useState(false);
 
-  const services = useMemo(
-    () => [
-      {
-        id: 'house-cleaning',
-        title: 'Cleaning Services',
-        description: 'Emergency cleaning when you need a spotless space right away. Perfect for last-minute or urgent needs.',
-        price: 'Get Quote',
-        icon: Home,
-        active: true,
-      },
-      {
-        id: 'general-labor',
-        title: 'General Labor',
-        description: 'Need an extra hand? Our general laborers help with moving, setup, and day-to-day tasks.',
-        price: 'Get Quote',
-        icon: Briefcase,
-        active: true,
-      },
-      {
-        id: 'event-assistant',
-        title: 'Event Assistant',
-        description: 'We keep your event clean and organized from start to finish.',
-        price: 'Get Quote',
-        icon: PartyPopper,
-        active: true,
-      },
-    ],
-    []
-  );
+  // NEW: supports deep link /?ref=FZ-XXXX to show just that booking in dashboard
+  const [deepRef, setDeepRef] = useState<string | null>(null);
 
-  // Get available time slots based on current time
-  const getAvailableTimeSlots = (selectedDateStr: string) => {
-    const allSlots = [
-      '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
-      '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM',
-      '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM'
-    ];
+  const services = [
+    {
+      id: 'house-cleaning',
+      title: 'Cleaning Services',
+      description: 'Emergency cleaning when you need a spotless space right away. Perfect for last-minute or urgent needs.',
+      price: 'Get Quote',
+      icon: Home,
+    },
+    {
+      id: 'general-labor',
+      title: 'General Labor',
+      description: 'Need an extra hand? Our general laborers help with moving, setup, and day-to-day tasks.',
+      price: 'Get Quote',
+      icon: Briefcase,
+    },
+    {
+      id: 'event-assistant',
+      title: 'Event Assistant',
+      description: 'We keep your event clean and organized from start to finish.',
+      price: 'Get Quote',
+      icon: PartyPopper,
+    },
+  ];
 
-    const now = new Date();
-    const selectedDate = new Date(selectedDateStr);
-    const isToday = selectedDate.toDateString() === now.toDateString();
+  const timeSlots = ['8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'];
 
-    if (!isToday) {
-      return allSlots;
-    }
-
-    // Filter out past times for today
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    return allSlots.filter(slot => {
-      const [time, period] = slot.split(' ');
-      let [hours] = time.split(':').map(Number);
-
-      if (period === 'PM' && hours !== 12) hours += 12;
-      if (period === 'AM' && hours === 12) hours = 0;
-
-      // Show only slots that are at least 1 hour in the future
-      if (hours < currentHour) return false;
-      if (hours === currentHour && currentMinute > 0) return false;
-
-      return true;
-    });
-  };
-
-  // Load saved user + hidden admin gate
+  // seed demo data + load saved user + admin flag
   useEffect(() => {
+    setAllBookings([
+      {
+        id: 1,
+        service: 'Cleaning Services',
+        date: '2025-10-10',
+        time: '10:00 AM',
+        status: 'Confirmed',
+        reference: 'FZ-2025-ABC123',
+        customer: {
+          name: 'Sarah Johnson',
+          email: 'sarah@email.com',
+          phone: '(470) 604-1366',
+          address: '123 Oak St, Marietta, GA 30060',
+        },
+        notes: 'Please focus on kitchen',
+        createdAt: '2025-10-03T10:30:00',
+      },
+    ]);
+
     try {
       const saved = localStorage.getItem('fz_user');
       if (saved) {
@@ -144,71 +117,23 @@ const FlitZapApp = () => {
     } catch {}
   }, []);
 
-  // Persist user info locally
+  // NEW: read ?ref= on first load -> open dashboard filtered to that booking
   useEffect(() => {
     try {
-      localStorage.setItem('fz_user', JSON.stringify(userInfo));
-    } catch {}
-  }, [userInfo]);
-
-  // Deep-link handler
-  useEffect(() => {
-    try {
-      const qs = new URLSearchParams(window.location.search);
-      const ref = qs.get('ref');
-      if (!ref) return;
-
-      (async () => {
-        const { data, error } = await supabase
-          .from('bookings')
-          .select('*')
-          .eq('reference', ref)
-          .limit(1);
-
-        if (error) {
-          console.error('Load by ref error:', error);
-          return;
-        }
-        const row = data?.[0];
-        if (!row) return;
-
-        const mapped: Booking = {
-          id: row.id,
-          service: row.service,
-          date: row.date,
-          time: row.time,
-          status: row.status,
-          reference: row.reference,
-          customer: {
-            name: row.customer_name,
-            email: row.customer_email,
-            phone: row.customer_phone,
-            address: row.customer_address,
-          },
-          notes: row.notes || '',
-          createdAt: row.created_at,
-        };
-
-        setUserInfo({
-          name: mapped.customer.name,
-          email: mapped.customer.email,
-          phone: mapped.customer.phone,
-          address: mapped.customer.address,
-          notes: mapped.notes || '',
-        });
-        setIsLoggedIn(true);
-
-        setAllBookings(prev =>
-          prev.some(b => b.reference === mapped.reference) ? prev : [...prev, mapped]
-        );
-
+      if (typeof window === 'undefined') return;
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      if (ref) {
+        setDeepRef(ref);
         setShowDashboard(true);
         setCurrentStep('home');
-      })();
-    } catch (e) {
-      console.error('Deep-link exception:', e);
-    }
+      }
+    } catch {}
   }, []);
+
+  // persist user info locally (so greeting & dashboard filter work on refresh)
+  useEffect(() => {
+    try { localStorage.setItem('fz_user', JSON.stringify(userInfo)); } catch {}
+  }, [userInfo]);
 
   const firstName = (userInfo.name || '').trim().split(' ')[0] || '';
 
@@ -228,68 +153,10 @@ const FlitZapApp = () => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
-  const mapRowToBooking = (row: any): Booking => ({
-    id: row.id,
-    service: row.service,
-    date: row.date,
-    time: row.time,
-    status: row.status,
-    reference: row.reference,
-    customer: {
-      name: row.customer_name,
-      email: row.customer_email,
-      phone: row.customer_phone,
-      address: row.customer_address,
-    },
-    notes: row.notes ?? null,
-    createdAt: row.created_at,
-  });
-
-  const fetchBookingsForUser = async () => {
-    if (!userInfo.email && !userInfo.phone) return;
-    try {
-      setLoadingBookings(true);
-      const query = supabase.from('bookings').select('*').order('created_at', { ascending: false });
-      let resp;
-
-      if (userInfo.email && userInfo.phone) {
-        resp = await query.or(`customer_email.eq.${userInfo.email},customer_phone.eq.${userInfo.phone}`);
-      } else if (userInfo.email) {
-        resp = await query.eq('customer_email', userInfo.email);
-      } else {
-        resp = await query.eq('customer_phone', userInfo.phone);
-      }
-
-      if (resp.error) {
-        console.error('Supabase fetch error:', resp.error);
-        return;
-      }
-      setAllBookings((resp.data || []).map(mapRowToBooking));
-    } catch (e) {
-      console.error('Fetch bookings failed:', e);
-    } finally {
-      setLoadingBookings(false);
-    }
-  };
-
-  useEffect(() => {
-    if (userInfo.email || userInfo.phone) {
-      fetchBookingsForUser();
-    } else {
-      setAllBookings([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userInfo.email, userInfo.phone]);
-
-  const handleServiceSelect = (service: any) => {
+  const handleServiceSelect = (service: { id: string; title: string; price: string; icon: any }) => {
     setSelectedService(service);
     setCurrentStep('time-selection');
   };
@@ -303,59 +170,74 @@ const FlitZapApp = () => {
     setBusy(true);
     try {
       const reference = generateBookingReference();
-
-      const insertPayload = {
-        reference,
-        service: selectedService.title,
+      const newBooking: Booking = {
+        id: allBookings.length + 1,
+        service: selectedService?.title || '',
         date: selectedDate,
         time: selectedTime,
-        status: 'Confirmed' as const,
-        customer_name: userInfo.name,
-        customer_email: userInfo.email,
-        customer_phone: userInfo.phone,
-        customer_address: userInfo.address,
-        notes: userInfo.notes || null,
+        status: 'Confirmed',
+        reference,
+        customer: {
+          name: userInfo.name,
+          email: userInfo.email,
+          phone: userInfo.phone,
+          address: userInfo.address,
+        },
+        notes: userInfo.notes,
+        createdAt: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
+      // Write to Supabase
+      const { error } = await supabase
         .from('bookings')
-        .insert(insertPayload)
-        .select('*')
-        .single();
+        .insert({
+          reference: newBooking.reference,
+          service: newBooking.service,
+          date: newBooking.date,
+          time: newBooking.time,
+          status: newBooking.status,
+          customer_name: newBooking.customer.name,
+          customer_email: newBooking.customer.email,
+          customer_phone: newBooking.customer.phone,
+          customer_address: newBooking.customer.address,
+          notes: newBooking.notes ?? null,
+        });
 
       if (error) {
-        console.error('Supabase insert error:', { message: error.message, details: error.details, hint: error.hint });
+        console.error('Supabase insert error:', error);
         alert('Could not save booking (database). Check console for details.');
         return;
       }
 
-      const saved = mapRowToBooking(data);
-      setAllBookings((prev) => [saved, ...prev]);
-      setBookingReference(reference);
-      setIsLoggedIn(true);
-      setCurrentStep('confirmation');
-
+      // Notify via Brevo (single CTA + unsquished logo)
       try {
         await fetch('/api/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            type: 'booking.created',
             toEmail: userInfo.email,
             toName: userInfo.name,
-            reference: saved.reference,
-            service: saved.service,
-            date: saved.date,
-            time: saved.time,
-            name: saved.customer.name,
-            email: saved.customer.email,
-            phone: saved.customer.phone,
-            address: saved.customer.address,
-            notes: saved.notes || '',
+            reference,
+            service: selectedService?.title || '',
+            date: selectedDate,
+            time: selectedTime,
+            name: userInfo.name,
+            email: userInfo.email,
+            phone: userInfo.phone,
+            address: userInfo.address,
+            notes: userInfo.notes || '',
           }),
         });
       } catch (notifyErr) {
         console.warn('Notify failed (continuing):', notifyErr);
       }
+
+      // Mirror to UI
+      setAllBookings((prev) => [...prev, newBooking]);
+      setBookingReference(reference);
+      setIsLoggedIn(true);
+      setCurrentStep('confirmation');
     } catch (e) {
       console.error('SAVE TO DATABASE FAILED:', e);
       alert('Could not save booking. Please try again.');
@@ -372,49 +254,50 @@ const FlitZapApp = () => {
     setBookingReference('');
     setShowDashboard(false);
     setShowAdmin(false);
+    setDeepRef(null);
   };
 
   const cancelBooking = async (bookingId: number) => {
-    const b = allBookings.find(x => x.id === bookingId);
-    if (!b) return;
-
     try {
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'Cancelled' })
-        .eq('reference', b.reference);
+        .eq('id', bookingId);
 
       if (error) {
-        alert('Could not cancel (database).');
+        console.error('Cancel error:', error);
+        alert('Could not cancel booking.');
         return;
       }
-    } catch {
-      alert('Could not cancel (network).');
-      return;
+
+      setAllBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: 'Cancelled' } : b)));
+
+      // fire cancel email
+      const b = allBookings.find(x => x.id === bookingId);
+      if (b) {
+        await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'booking.cancelled',
+            toEmail: b.customer.email,
+            toName: b.customer.name,
+            reference: b.reference,
+            service: b.service,
+            date: b.date,
+            time: b.time,
+            name: b.customer.name,
+            email: b.customer.email,
+            phone: b.customer.phone,
+            address: b.customer.address,
+            notes: b.notes || '',
+          }),
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Cancel exception:', e);
+      alert('Could not cancel booking.');
     }
-
-    setAllBookings(prev => prev.map(x => (x.id === bookingId ? { ...x, status: 'Cancelled' } : x)));
-
-    try {
-      await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'booking.cancelled',
-          toEmail: b.customer.email,
-          toName: b.customer.name,
-          reference: b.reference,
-          service: b.service,
-          date: b.date,
-          time: b.time,
-          name: b.customer.name,
-          email: b.customer.email,
-          phone: b.customer.phone,
-          address: b.customer.address,
-          notes: b.notes || '',
-        }),
-      });
-    } catch {}
   };
 
   const openReschedule = (booking: Booking) => {
@@ -432,6 +315,7 @@ const FlitZapApp = () => {
   const saveReschedule = async () => {
     if (!rescheduleBooking || !rescheduleDate || !rescheduleTime) return;
 
+    // Update DB
     try {
       const { error } = await supabase
         .from('bookings')
@@ -447,10 +331,12 @@ const FlitZapApp = () => {
       return;
     }
 
+    // Update UI
     setAllBookings(prev =>
       prev.map(b => (b.id === rescheduleBooking.id ? { ...b, date: rescheduleDate, time: rescheduleTime } : b)),
     );
 
+    // send reschedule email
     try {
       await fetch('/api/notify', {
         method: 'POST',
@@ -475,24 +361,14 @@ const FlitZapApp = () => {
     closeReschedule();
   };
 
-  const exportBookings = async () => {
+  const exportBookings = () => {
     const csvContent = [
-      ['Reference', 'Service', 'Date', 'Time', 'Status', 'Name', 'Email', 'Phone', 'Address', 'Notes'],
+      ['Reference','Service','Date','Time','Status','Name','Email','Phone','Address','Notes'],
       ...allBookings.map((b) => [
-        b.reference,
-        b.service,
-        b.date,
-        b.time,
-        b.status,
-        b.customer.name,
-        b.customer.email,
-        b.customer.phone,
-        b.customer.address,
-        b.notes || '',
+        b.reference, b.service, b.date, b.time, b.status,
+        b.customer.name, b.customer.email, b.customer.phone, b.customer.address, b.notes || '',
       ]),
-    ]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+    ].map((row) => row.join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -503,8 +379,6 @@ const FlitZapApp = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  const availableSlots = selectedDate ? getAvailableTimeSlots(selectedDate) : [];
-
   return (
     <div className="min-h-screen" style={{ backgroundColor: CANVAS }}>
       {/* Header */}
@@ -514,10 +388,8 @@ const FlitZapApp = () => {
             {(currentStep !== 'home' || (isAdmin && showAdmin)) && !showDashboard && (
               <button
                 onClick={() => {
-                  if (showAdmin) {
-                    setShowAdmin(false);
-                    setCurrentStep('home');
-                  } else if (currentStep === 'time-selection') setCurrentStep('home');
+                  if (showAdmin) { setShowAdmin(false); setCurrentStep('home'); }
+                  else if (currentStep === 'time-selection') setCurrentStep('home');
                   else if (currentStep === 'checkout') setCurrentStep('time-selection');
                   else if (currentStep === 'confirmation') resetFlow();
                 }}
@@ -528,7 +400,16 @@ const FlitZapApp = () => {
               </button>
             )}
 
-            <h1 className="cursor-pointer" onClick={resetFlow} aria-label="FlitZap Home">
+            {/* Logo with safe fallback */}
+            <h1
+              className="cursor-pointer"
+              onClick={() => {
+                // go home inside the app
+                resetFlow();
+              }}
+              aria-label="FlitZap Home"
+              title="FlitZap"
+            >
               {logoOk ? (
                 <Image
                   src="/flitzap-logo.png"
@@ -537,7 +418,7 @@ const FlitZapApp = () => {
                   height={40}
                   priority
                   onError={() => setLogoOk(false)}
-                  className="h-10 w-auto"
+                  style={{ height: 'auto', width: '160px' }} // prevent squish
                 />
               ) : (
                 <span className="text-2xl font-bold">
@@ -548,16 +429,18 @@ const FlitZapApp = () => {
             </h1>
           </div>
 
+          {/* Right controls */}
           <div className="flex items-center space-x-3">
-            
-              href={MARKETING_URL}
+            {/* NEW: Go back to FlitZap (marketing site) */}
+            <a
+              href="https://www.flitzap.com"
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-2 rounded-md text-sm font-medium hover:opacity-90"
               style={{ border: `1px solid ${BORDER}`, color: DARK, background: '#fff' }}
-              title="Go to flitzap.com"
+              title="Go back to FlitZap"
             >
-              Website
+              Go back to FlitZap
             </a>
 
             {isLoggedIn && (
@@ -568,10 +451,7 @@ const FlitZapApp = () => {
                   </span>
                 )}
                 <button
-                  onClick={() => {
-                    setShowDashboard(!showDashboard);
-                    setShowAdmin(false);
-                  }}
+                  onClick={() => { setShowDashboard(!showDashboard); setShowAdmin(false); }}
                   className="p-2 rounded-full hover:opacity-90"
                   style={{ backgroundColor: DARK, color: '#fff' }}
                   title="My Bookings"
@@ -581,6 +461,7 @@ const FlitZapApp = () => {
                 </button>
               </>
             )}
+            {/* Hidden admin entry: set localStorage.fz_admin='1' to reveal */}
             {isAdmin && (
               <button
                 onClick={() => setShowAdmin(!showAdmin)}
@@ -620,16 +501,10 @@ const FlitZapApp = () => {
                       <Icon className="w-6 h-6" style={{ color: '#fff' }} />
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold mb-1" style={{ color: DARK }}>
-                        {service.title}
-                      </h3>
-                      <p className="text-sm mb-3" style={{ color: TEXT }}>
-                        {service.description}
-                      </p>
+                      <h3 className="font-semibold mb-1" style={{ color: DARK }}>{service.title}</h3>
+                      <p className="text-sm mb-3" style={{ color: TEXT }}>{/* description trimmed on purpose */}</p>
                       <div className="flex items-center justify-between">
-                        <span className="font-medium" style={{ color: PRIMARY }}>
-                          {service.price}
-                        </span>
+                        <span className="font-medium" style={{ color: PRIMARY }}>{service.price}</span>
                         <button
                           className="px-4 py-2 rounded-lg text-sm font-medium"
                           style={{ backgroundColor: PRIMARY, color: '#fff' }}
@@ -646,12 +521,7 @@ const FlitZapApp = () => {
           </div>
 
           <div className="mt-8 text-center text-sm" style={{ color: TEXT }}>
-            <p>
-              📞 (470) 604-1366 • 📧 info@flitzap.com •{' '}
-              <a href={MARKETING_URL} target="_blank" rel="noopener noreferrer" style={{ color: PRIMARY }}>
-                flitzap.com
-              </a>
-            </p>
+            <p>📞 (470) 604-1366 • 📧 info@flitzap.com</p>
           </div>
         </div>
       )}
@@ -699,35 +569,27 @@ const FlitZapApp = () => {
                 <label className="block text-sm font-medium mb-3 flex items-center" style={{ color: DARK }}>
                   <Clock className="w-4 h-4 mr-2" /> Select Time
                 </label>
-                {availableSlots.length === 0 ? (
-                  <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
-                    <p className="text-sm text-yellow-800">
-                      No more time slots available today. Please select a future date.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-2">
-                    {availableSlots.map((time) => (
-                      <button
-                        key={time}
-                        onClick={() => setSelectedTime(time)}
-                        className="p-3 text-sm rounded-lg"
-                        style={{
-                          border: `1px solid ${BORDER}`,
-                          backgroundColor: selectedTime === time ? PRIMARY : 'white',
-                          color: selectedTime === time ? '#fff' : DARK,
-                        }}
-                      >
-                        {time}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="grid grid-cols-3 gap-2">
+                  {timeSlots.map((time) => (
+                    <button
+                      key={time}
+                      onClick={() => setSelectedTime(time)}
+                      className="p-3 text-sm rounded-lg"
+                      style={{
+                        border: `1px solid ${BORDER}`,
+                        backgroundColor: selectedTime === time ? PRIMARY : 'white',
+                        color: selectedTime === time ? '#fff' : DARK,
+                      }}
+                    >
+                      {time}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
-          {selectedDate && selectedTime && availableSlots.length > 0 && (
+          {selectedDate && selectedTime && (
             <button
               onClick={handleTimeSelection}
               className="w-full mt-8 py-3 rounded-lg font-medium"
@@ -755,23 +617,28 @@ const FlitZapApp = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>👤 Full Name</label>
-                <input type="text" value={userInfo.name} onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })} className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="Your full name" />
+                <input type="text" value={userInfo.name} onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="Your full name" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📧 Email</label>
-                <input type="email" value={userInfo.email} onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })} className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="your@email.com" />
+                <input type="email" value={userInfo.email} onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="your@email.com" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📱 Phone</label>
-                <input type="tel" value={userInfo.phone} onChange={(e) => setUserInfo({ ...userInfo, phone: e.target.value })} className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="(555) 123-4567" />
+                <input type="tel" value={userInfo.phone} onChange={(e) => setUserInfo({ ...userInfo, phone: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="(555) 123-4567" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>🏠 Service Address</label>
-                <input type="text" value={userInfo.address} onChange={(e) => setUserInfo({ ...userInfo, address: e.target.value })} className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="123 Main St, City, State, ZIP" />
+                <input type="text" value={userInfo.address} onChange={(e) => setUserInfo({ ...userInfo, address: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="123 Main St, City, State, ZIP" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📝 Special Instructions</label>
-                <textarea value={userInfo.notes} onChange={(e) => setUserInfo({ ...userInfo, notes: e.target.value })} className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} rows={3} placeholder="Any special requests or notes..." />
+                <textarea value={userInfo.notes} onChange={(e) => setUserInfo({ ...userInfo, notes: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} rows={3} placeholder="Any special requests or notes..." />
               </div>
             </div>
           </div>
@@ -781,7 +648,7 @@ const FlitZapApp = () => {
               <CreditCard className="w-4 h-4 mr-2" /> Payment Method
             </p>
             <p className="text-sm" style={{ color: TEXT }}>
-              We'll collect payment after your job is completed. You'll receive a secure link by text to pay from your phone.
+              We’ll collect payment after your job is completed. You’ll receive a secure link by text to pay from your phone.
             </p>
           </div>
 
@@ -818,35 +685,16 @@ const FlitZapApp = () => {
             </div>
           </div>
 
-          <div className="p-4 rounded-lg mb-6 text-sm bg-white shadow-md text-left" style={{ border: `1px solid ${BORDER}` }}>
-            <p className="font-semibold mb-3" style={{ color: DARK }}>Next Steps</p>
-            <div className="space-y-3" style={{ color: TEXT }}>
-              <div>
-                <p className="font-medium" style={{ color: DARK }}>📞 Quote call</p>
-                <p className="text-sm">A FlitZap coordinator will call you shortly to confirm details and provide your final quote.</p>
-              </div>
-              <div>
-                <p className="font-medium" style={{ color: DARK }}>
-                  <CreditCard className="w-4 h-4 inline mr-1" /> Payment
-                </p>
-                <p className="text-sm">After your job is completed, we'll text you a secure link to pay from your phone. No charge upfront.</p>
-              </div>
-            </div>
-          </div>
-
           <div className="space-y-3">
             <button onClick={resetFlow} className="w-full py-3 rounded-lg font-medium" style={{ backgroundColor: PRIMARY, color: '#fff' }}>
               Book Another Service
             </button>
             <button
-              onClick={() => {
-                setShowDashboard(true);
-                setCurrentStep('home');
-              }}
+              onClick={() => { setShowDashboard(true); setCurrentStep('home'); setDeepRef(bookingReference); }}
               className="w-full py-3 rounded-lg font-medium bg-white"
               style={{ border: `1px solid ${BORDER}`, color: DARK }}
             >
-              View My Bookings
+              View My Booking
             </button>
           </div>
         </div>
@@ -860,60 +708,36 @@ const FlitZapApp = () => {
               My Bookings{firstName ? ` — ${firstName}` : ''}
             </h2>
             <button
-              onClick={() => {
-                setShowDashboard(false);
-                setCurrentStep('home');
-              }}
+              onClick={() => { setShowDashboard(false); setCurrentStep('home'); setDeepRef(null); }}
               className="text-sm font-medium"
               style={{ color: PRIMARY }}
             >
               Back
             </button>
           </div>
-
-          {loadingBookings && <p className="text-sm" style={{ color: TEXT }}>Loading…</p>}
-
           {allBookings
-            .filter((b) => b.customer.email === userInfo.email || b.customer.phone === userInfo.phone)
+            .filter((b) =>
+              deepRef
+                ? b.reference === deepRef
+                : (b.customer.email === userInfo.email || b.customer.phone === userInfo.phone)
+            )
             .map((b) => (
               <div key={b.id} className="bg-white rounded-lg p-4 mb-4 shadow-md" style={{ border: `1px solid ${BORDER}` }}>
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <h3 className="font-medium" style={{ color: DARK }}>{b.service}</h3>
-                    <p className="text-sm" style={{ color: TEXT }}>
-                      {formatDate(b.date)} at {b.time}
-                    </p>
+                    <p className="text-sm" style={{ color: TEXT }}>{formatDate(b.date)} at {b.time}</p>
                   </div>
-                  <span
-                    className={`px-2 py-1 text-xs rounded-full ${
-                      b.status === 'Confirmed' ? 'bg-green-100 text-green-800' : b.status === 'Cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {b.status}
-                  </span>
+                  <span className={`px-2 py-1 text-xs rounded-full ${b.status === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{b.status}</span>
                 </div>
                 <p className="text-xs mt-2" style={{ color: TEXT }}>Ref: {b.reference}</p>
-                {b.notes && (
-                  <p className="text-xs mt-1" style={{ color: TEXT }}>
-                    <span className="font-semibold">Notes:</span> {b.notes}
-                  </p>
-                )}
+                {b.notes && <p className="text-xs mt-1" style={{ color: TEXT }}><span className="font-semibold">Notes:</span> {b.notes}</p>}
                 {b.status === 'Confirmed' && (
                   <div className="flex gap-2 mt-3 pt-3 border-t" style={{ borderColor: BORDER }}>
-                    <button
-                      onClick={() => openReschedule(b)}
-                      className="flex-1 py-2 rounded-lg text-sm font-medium"
-                      style={{ backgroundColor: PRIMARY, color: '#fff' }}
-                    >
-                      Reschedule
-                    </button>
-                    <button
-                      onClick={() => cancelBooking(b.id)}
-                      className="flex-1 py-2 rounded-lg text-sm font-medium bg-white"
-                      style={{ border: `1px solid ${BORDER}`, color: '#B42318' }}
-                    >
-                      Cancel
-                    </button>
+                    <button onClick={() => openReschedule(b)} className="flex-1 py-2 rounded-lg text-sm font-medium"
+                      style={{ backgroundColor: PRIMARY, color: '#fff' }}>Reschedule</button>
+                    <button onClick={() => cancelBooking(b.id)} className="flex-1 py-2 rounded-lg text-sm font-medium bg-white"
+                      style={{ border: `1px solid ${BORDER}`, color: '#B42318' }}>Cancel</button>
                   </div>
                 )}
               </div>
@@ -921,12 +745,13 @@ const FlitZapApp = () => {
         </div>
       )}
 
-      {/* Admin Dashboard */}
+      {/* Admin (hidden unless localStorage fz_admin='1') */}
       {isAdmin && showAdmin && (
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold" style={{ color: DARK }}>Admin Dashboard</h2>
-            <button onClick={exportBookings} className="flex items-center px-4 py-2 rounded-lg font-medium hover:opacity-90" style={{ backgroundColor: PRIMARY, color: '#fff' }}>
+            <button onClick={exportBookings} className="flex items-center px-4 py-2 rounded-lg font-medium hover:opacity-90"
+              style={{ backgroundColor: PRIMARY, color: '#fff' }}>
               <Download className="w-4 h-4 mr-2" /> Export CSV
             </button>
           </div>
@@ -949,19 +774,12 @@ const FlitZapApp = () => {
                     <td className="px-4 py-4" style={{ color: DARK }}>{b.service}</td>
                     <td className="px-4 py-4" style={{ color: DARK }}>{b.customer.name}</td>
                     <td className="px-4 py-4">
-                      <a href={`mailto:${b.customer.email}`} style={{ color: PRIMARY }}>{b.customer.email}</a>
-                      <br />
+                      <a href={`mailto:${b.customer.email}`} style={{ color: PRIMARY }}>{b.customer.email}</a><br/>
                       <a href={`tel:${b.customer.phone}`} style={{ color: PRIMARY }}>{b.customer.phone}</a>
                     </td>
                     <td className="px-4 py-4" style={{ color: TEXT }}>{b.date} {b.time}</td>
                     <td className="px-4 py-4">
-                      <span
-                        className={`px-2 py-1 text-xs rounded-full ${
-                          b.status === 'Confirmed' ? 'bg-green-100 text-green-800' : b.status === 'Cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {b.status}
-                      </span>
+                      <span className={`px-2 py-1 text-xs rounded-full ${b.status === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{b.status}</span>
                     </td>
                   </tr>
                 ))}
@@ -1002,28 +820,22 @@ const FlitZapApp = () => {
               {rescheduleDate && (
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: DARK }}>New Time</label>
-                  {getAvailableTimeSlots(rescheduleDate).length === 0 ? (
-                    <p className="text-sm p-3 bg-yellow-50 rounded border border-yellow-200 text-yellow-800">
-                      No available time slots for this date.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {getAvailableTimeSlots(rescheduleDate).map((time) => (
-                        <button
-                          key={time}
-                          onClick={() => setRescheduleTime(time)}
-                          className="p-2 text-sm rounded"
-                          style={{
-                            border: `1px solid ${BORDER}`,
-                            backgroundColor: rescheduleTime === time ? PRIMARY : 'white',
-                            color: rescheduleTime === time ? '#fff' : DARK,
-                          }}
-                        >
-                          {time}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="grid grid-cols-3 gap-2">
+                    {timeSlots.map((time) => (
+                      <button
+                        key={time}
+                        onClick={() => setRescheduleTime(time)}
+                        className="p-2 text-sm rounded"
+                        style={{
+                          border: `1px solid ${BORDER}`,
+                          backgroundColor: rescheduleTime === time ? PRIMARY : 'white',
+                          color: rescheduleTime === time ? '#fff' : DARK,
+                        }}
+                      >
+                        {time}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
               <button
