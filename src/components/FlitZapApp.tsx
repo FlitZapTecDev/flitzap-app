@@ -40,7 +40,7 @@ const inputStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   backgroundColor: '#fff',
   color: '#000',
-  WebkitTextFillColor: '#000', // iOS/Android dark mode force black text
+  WebkitTextFillColor: '#888', // iOS/Android dark mode force black text
 };
 
 const FlitZapApp = () => {
@@ -90,7 +90,7 @@ const FlitZapApp = () => {
     },
   ];
 
-  const timeSlots = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'];
+  const timeSlots = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
 
   // seed demo data + load saved user + admin flag
   useEffect(() => {
