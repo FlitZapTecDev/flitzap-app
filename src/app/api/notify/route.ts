@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
     // IMPORTANT: must be your app domain in production (set in Vercel)
     const appBase   = process.env.NEXT_PUBLIC_SITE_URL || 'https://app.flitzap.com';
-    const bookingUrl = `https://app.flitzap.com/view?ref=${encodeURIComponent(reference)}`;
+    const bookingUrl = `https://app.flitzap.com/?ref=${encodeURIComponent(reference)}`;
 
     if (!apiKey) {
       return NextResponse.json({ ok: false, error: 'Missing BREVO_API_KEY' }, { status: 400 });
