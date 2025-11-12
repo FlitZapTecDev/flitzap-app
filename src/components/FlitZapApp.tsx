@@ -36,9 +36,16 @@ const BORDER = '#E5DCC5';
 const SOFT = '#FFFCE2';
 const PALEBLUE = '#F7FBFF';
 
+const inputStyle: React.CSSProperties = {
+  border: `1px solid ${BORDER}`,
+  backgroundColor: '#fff',
+  color: '#000',
+  WebkitTextFillColor: '#000', // iOS/Android dark mode force black text
+};
+
 const FlitZapApp = () => {
   const [currentStep, setCurrentStep] = useState<'home' | 'time-selection' | 'checkout' | 'confirmation'>('home');
-  const [selectedService, setSelectedService] = useState<{ id: string; title: string; price: string; icon: any } | null>(null);
+  const [selectedService, setSelectedService] = useState<{ id: string; title: string; price: string; icon: any; description?: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [userInfo, setUserInfo] = useState({ email: '', phone: '', address: '', name: '', notes: '' });
@@ -55,14 +62,15 @@ const FlitZapApp = () => {
   const [logoOk, setLogoOk] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  // NEW: supports deep link /?ref=FZ-XXXX to show just that booking in dashboard
+  // supports deep link /?ref=FZ-XXXX to show that booking in dashboard
   const [deepRef, setDeepRef] = useState<string | null>(null);
 
   const services = [
     {
       id: 'house-cleaning',
       title: 'Cleaning Services',
-      description: 'Emergency cleaning when you need a spotless space right away. Perfect for last-minute or urgent needs.',
+      description:
+        'Emergency cleaning when you need a spotless space right away. Perfect for last-minute or urgent needs.',
       price: 'Get Quote',
       icon: Home,
     },
@@ -82,7 +90,7 @@ const FlitZapApp = () => {
     },
   ];
 
-  const timeSlots = ['8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'];
+  const timeSlots = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'];
 
   // seed demo data + load saved user + admin flag
   useEffect(() => {
@@ -110,29 +118,83 @@ const FlitZapApp = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         setUserInfo(parsed);
-        if (parsed?.email) setIsLoggedIn(true);
       }
       const adminFlag = localStorage.getItem('fz_admin');
       if (adminFlag === '1') setIsAdmin(true);
     } catch {}
   }, []);
 
-  // NEW: read ?ref= on first load -> open dashboard filtered to that booking
+  // read ?ref= and open dashboard. Also fetch that booking from Supabase so it shows even on a fresh device.
   useEffect(() => {
-    try {
-      if (typeof window === 'undefined') return;
-      const ref = new URLSearchParams(window.location.search).get('ref');
-      if (ref) {
-        setDeepRef(ref);
-        setShowDashboard(true);
-        setCurrentStep('home');
-      }
-    } catch {}
+    if (typeof window === 'undefined') return;
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (ref) {
+      setDeepRef(ref);
+      setShowDashboard(true);
+      setCurrentStep('home');
+    }
   }, []);
 
-  // persist user info locally (so greeting & dashboard filter work on refresh)
+  // when deepRef is set, fetch it from Supabase and add to UI if not present
+  useEffect(() => {
+    const fetchByRef = async () => {
+      if (!deepRef) return;
+      // already in memory?
+      const exists = allBookings.some(b => b.reference === deepRef);
+      if (exists) return;
+
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('reference', deepRef)
+        .single();
+
+      if (error || !data) return;
+
+      // Map DB row -> Booking shape
+      const mapped: Booking = {
+        id: data.id,
+        service: data.service,
+        date: data.date,             // DB date column is date
+        time: data.time,
+        status: data.status,
+        reference: data.reference,
+        customer: {
+          name: data.customer_name,
+          email: data.customer_email,
+          phone: data.customer_phone,
+          address: data.customer_address,
+        },
+        notes: data.notes || '',
+        createdAt: data.created_at,
+      };
+
+      setAllBookings(prev => {
+        if (prev.some(b => b.reference === mapped.reference)) return prev;
+        return [...prev, mapped];
+      });
+
+      // Make sure user looks “logged in” for UI controls
+      setIsLoggedIn(true);
+      // Also prefill local form person for a nicer feel next visits
+      setUserInfo({
+        name: mapped.customer.name || '',
+        email: mapped.customer.email || '',
+        phone: mapped.customer.phone || '',
+        address: mapped.customer.address || '',
+        notes: '',
+      });
+    };
+
+    fetchByRef().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepRef]);
+
+  // persist user info locally
   useEffect(() => {
     try { localStorage.setItem('fz_user', JSON.stringify(userInfo)); } catch {}
+    // logged-in for UI if email present
+    setIsLoggedIn(!!userInfo.email);
   }, [userInfo]);
 
   const firstName = (userInfo.name || '').trim().split(' ')[0] || '';
@@ -156,7 +218,7 @@ const FlitZapApp = () => {
     return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
-  const handleServiceSelect = (service: { id: string; title: string; price: string; icon: any }) => {
+  const handleServiceSelect = (service: { id: string; title: string; price: string; icon: any; description?: string }) => {
     setSelectedService(service);
     setCurrentStep('time-selection');
   };
@@ -209,7 +271,7 @@ const FlitZapApp = () => {
         return;
       }
 
-      // Notify via Brevo (single CTA + unsquished logo)
+      // Notify via Brevo
       try {
         await fetch('/api/notify', {
           method: 'POST',
@@ -403,10 +465,7 @@ const FlitZapApp = () => {
             {/* Logo with safe fallback */}
             <h1
               className="cursor-pointer"
-              onClick={() => {
-                // go home inside the app
-                resetFlow();
-              }}
+              onClick={() => { resetFlow(); }}
               aria-label="FlitZap Home"
               title="FlitZap"
             >
@@ -431,7 +490,7 @@ const FlitZapApp = () => {
 
           {/* Right controls */}
           <div className="flex items-center space-x-3">
-            {/* NEW: Go back to FlitZap (marketing site) */}
+            {/* Go back to FlitZap (marketing site) */}
             <a
               href="https://www.flitzap.com"
               target="_blank"
@@ -502,7 +561,8 @@ const FlitZapApp = () => {
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold mb-1" style={{ color: DARK }}>{service.title}</h3>
-                      <p className="text-sm mb-3" style={{ color: TEXT }}>{/* description trimmed on purpose */}</p>
+                      {/* RESTORED description */}
+                      <p className="text-sm mb-3" style={{ color: TEXT }}>{service.description}</p>
                       <div className="flex items-center justify-between">
                         <span className="font-medium" style={{ color: PRIMARY }}>{service.price}</span>
                         <button
@@ -617,28 +677,58 @@ const FlitZapApp = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>👤 Full Name</label>
-                <input type="text" value={userInfo.name} onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="Your full name" />
+                <input
+                  type="text"
+                  value={userInfo.name}
+                  onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white"
+                  style={inputStyle}
+                  placeholder="Your full name"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📧 Email</label>
-                <input type="email" value={userInfo.email} onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="your@email.com" />
+                <input
+                  type="email"
+                  value={userInfo.email}
+                  onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white"
+                  style={inputStyle}
+                  placeholder="your@email.com"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📱 Phone</label>
-                <input type="tel" value={userInfo.phone} onChange={(e) => setUserInfo({ ...userInfo, phone: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="(555) 123-4567" />
+                <input
+                  type="tel"
+                  value={userInfo.phone}
+                  onChange={(e) => setUserInfo({ ...userInfo, phone: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white"
+                  style={inputStyle}
+                  placeholder="(555) 123-4567"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>🏠 Service Address</label>
-                <input type="text" value={userInfo.address} onChange={(e) => setUserInfo({ ...userInfo, address: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} placeholder="123 Main St, City, State, ZIP" />
+                <input
+                  type="text"
+                  value={userInfo.address}
+                  onChange={(e) => setUserInfo({ ...userInfo, address: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white"
+                  style={inputStyle}
+                  placeholder="123 Main St, City, State, ZIP"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📝 Special Instructions</label>
-                <textarea value={userInfo.notes} onChange={(e) => setUserInfo({ ...userInfo, notes: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white" style={{ border: `1px solid ${BORDER}` }} rows={3} placeholder="Any special requests or notes..." />
+                <textarea
+                  value={userInfo.notes}
+                  onChange={(e) => setUserInfo({ ...userInfo, notes: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-white"
+                  style={inputStyle}
+                  rows={3}
+                  placeholder="Any special requests or notes..."
+                />
               </div>
             </div>
           </div>
@@ -682,6 +772,23 @@ const FlitZapApp = () => {
               <div className="flex justify-between"><span style={{ color: TEXT }}>Date:</span><span className="font-medium" style={{ color: DARK }}>{formatDate(selectedDate)}</span></div>
               <div className="flex justify-between"><span style={{ color: TEXT }}>Time:</span><span className="font-medium" style={{ color: DARK }}>{selectedTime}</span></div>
               <div className="flex justify-between"><span style={{ color: TEXT }}>Address:</span><span className="font-medium" style={{ color: DARK }}>{userInfo.address}</span></div>
+            </div>
+          </div>
+
+          {/* RESTORED Next Steps box exactly like before */}
+          <div className="p-4 rounded-lg mb-6 text-sm bg-white shadow-md text-left" style={{ border: `1px solid ${BORDER}` }}>
+            <p className="font-semibold mb-3" style={{ color: DARK }}>Next Steps</p>
+            <div className="space-y-3" style={{ color: TEXT }}>
+              <div>
+                <p className="font-medium" style={{ color: DARK }}>📞 Quote call</p>
+                <p className="text-sm">A FlitZap coordinator will call you shortly to confirm details and provide your final quote.</p>
+              </div>
+              <div>
+                <p className="font-medium" style={{ color: DARK }}>
+                  <CreditCard className="w-4 h-4 inline mr-1" /> Payment
+                </p>
+                <p className="text-sm">After your job is completed, we’ll text you a secure link to pay from your phone. No charge upfront.</p>
+              </div>
             </div>
           </div>
 
