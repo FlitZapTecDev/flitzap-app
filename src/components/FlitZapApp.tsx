@@ -40,7 +40,7 @@ const inputStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   backgroundColor: '#fff',
   color: '#000',
-  WebkitTextFillColor: '#888', // iOS/Android dark mode force black text
+  WebkitTextFillColor: '#000', // iOS/Android dark mode force black text
 };
 
 const FlitZapApp = () => {
