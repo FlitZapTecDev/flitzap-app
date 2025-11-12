@@ -24,3 +24,51 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+/* ---- FlitZap input and placeholder colors ---- */
+input::placeholder,
+textarea::placeholder {
+  color: #888888;
+  opacity: 1; /* full visibility */
+}
+
+input,
+textarea {
+  color: #000000;
+  background-color: #ffffff;
+  -webkit-text-fill-color: #000000; /* iOS dark mode */
+}
+/* ===== FlitZap input colors (works in dark mode & autofill) ===== */
+.flz-input,
+.flz-textarea {
+  color: #000000 !important;                 /* typed text */
+  background-color: #ffffff !important;      /* always white */
+  -webkit-text-fill-color: #000000 !important; /* force black in iOS dark mode */
+}
+
+/* Placeholder (all engines) */
+.flz-input::placeholder,
+.flz-textarea::placeholder {
+  color: #888888 !important;
+  opacity: 1 !important;
+}
+/* Older/engine-specific placeholder selectors */
+::-webkit-input-placeholder { color: #888888 !important; opacity: 1 !important; }
+:-ms-input-placeholder { color: #888888 !important; opacity: 1 !important; }
+::-ms-input-placeholder { color: #888888 !important; opacity: 1 !important; }
+
+/* Autofill (Chrome/Safari) */
+.flz-input:-webkit-autofill,
+.flz-textarea:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important; /* keep white bg */
+  -webkit-text-fill-color: #000000 !important;                /* keep black text */
+}
+
+/* Optional: when device is in dark mode, still force white input + black text */
+@media (prefers-color-scheme: dark) {
+  .flz-input,
+  .flz-textarea {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+  }
+}

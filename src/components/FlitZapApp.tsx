@@ -39,8 +39,11 @@ const PALEBLUE = '#F7FBFF';
 const inputStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   backgroundColor: '#fff',
-  color: '#000',
+  color: '#000',               // typed text
   WebkitTextFillColor: '#000', // iOS/Android dark mode force black text
+  '::placeholder': {
+    color: '#888888',          // placeholder color
+  } as any,
 };
 
 const FlitZapApp = () => {
@@ -677,58 +680,58 @@ const FlitZapApp = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>👤 Full Name</label>
-                <input
-                  type="text"
-                  value={userInfo.name}
-                  onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white"
-                  style={inputStyle}
-                  placeholder="Your full name"
-                />
+             <input
+  type="text"
+  value={userInfo.name}
+  onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })}
+  className="flz-input w-full p-3 rounded-lg bg-white"
+  style={{ border: `1px solid ${BORDER}` }}
+  placeholder="Your full name"
+/>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📧 Email</label>
                 <input
-                  type="email"
-                  value={userInfo.email}
-                  onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white"
-                  style={inputStyle}
-                  placeholder="your@email.com"
-                />
+  type="email"
+  value={userInfo.email}
+  onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })}
+  className="flz-input w-full p-3 rounded-lg bg-white"
+  style={{ border: `1px solid ${BORDER}` }}
+  placeholder="your@email.com"
+/>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📱 Phone</label>
                 <input
-                  type="tel"
-                  value={userInfo.phone}
-                  onChange={(e) => setUserInfo({ ...userInfo, phone: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white"
-                  style={inputStyle}
-                  placeholder="(555) 123-4567"
-                />
+  type="tel"
+  value={userInfo.phone}
+  onChange={(e) => setUserInfo({ ...userInfo, phone: e.target.value })}
+  className="flz-input w-full p-3 rounded-lg bg-white"
+  style={{ border: `1px solid ${BORDER}` }}
+  placeholder="(000) 123-4567"
+/>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>🏠 Service Address</label>
                 <input
-                  type="text"
-                  value={userInfo.address}
-                  onChange={(e) => setUserInfo({ ...userInfo, address: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white"
-                  style={inputStyle}
-                  placeholder="123 Main St, City, State, ZIP"
-                />
+  type="text"
+  value={userInfo.address}
+  onChange={(e) => setUserInfo({ ...userInfo, address: e.target.value })}
+  className="flz-input w-full p-3 rounded-lg bg-white"
+  style={{ border: `1px solid ${BORDER}` }}
+  placeholder="123 Main St, City, State, ZIP"
+/>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: DARK }}>📝 Special Instructions</label>
                 <textarea
-                  value={userInfo.notes}
-                  onChange={(e) => setUserInfo({ ...userInfo, notes: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-white"
-                  style={inputStyle}
-                  rows={3}
-                  placeholder="Any special requests or notes..."
-                />
+  value={userInfo.notes}
+  onChange={(e) => setUserInfo({ ...userInfo, notes: e.target.value })}
+  className="flz-textarea w-full p-3 rounded-lg bg-white"
+  style={{ border: `1px solid ${BORDER}` }}
+  rows={3}
+  placeholder="Any special requests or notes..."
+/>
               </div>
             </div>
           </div>
