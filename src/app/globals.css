@@ -106,3 +106,14 @@ html body .flz-textarea:-ms-input-placeholder {
   color: #d3d3d3 !important;
   opacity: 1 !important;
 }
+
+/* Only apply the grey placeholder while the placeholder is shown (input is empty) */
+.flz-input:placeholder-shown::placeholder,
+.flz-textarea:placeholder-shown::placeholder,
+.flz-input:placeholder-shown::-webkit-input-placeholder,
+.flz-textarea:placeholder-shown::-webkit-input-placeholder,
+.flz-input:placeholder-shown:-ms-input-placeholder,
+.flz-textarea:placeholder-shown:-ms-input-placeholder {
+  color: #d3d3d3 !important;
+  opacity: 1 !important;
+}
