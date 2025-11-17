@@ -41,9 +41,6 @@ const inputStyle: React.CSSProperties = {
   backgroundColor: '#fff',
   color: '#000',               // typed text
   WebkitTextFillColor: '#000', // iOS/Android dark mode force black text
-  '::placeholder': {
-    color: '#888888',          // placeholder color
-  } as any,
 };
 
 const FlitZapApp = () => {
